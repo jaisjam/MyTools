@@ -70,66 +70,76 @@ class IceGen:
         bin_dir = os.path.join(os.path.dirname(base), "bin")
         os.makedirs(bin_dir, exist_ok=True)
 
+        # ✅ Fix: generate CMakeLists.txt
         self.__write_cmakelists(base, device, top)
         self.__write_readme(base, device, top)
 
         if template != "none":
             self.__write_sample_files(base, top)
 
-        print(f"✅ Project '{project}' created (device: {device}, top: {top}, template: {template})")
+        print(f"Project '{project}' created (device: {device}, top: {top}, template: {template})")
 
     def __write_cmakelists(self, base, device, top):
+        import os
         path = os.path.join(base, "CMakeLists.txt")
         log_path = "build.log"
-
-        steps = [
-            (
-                "synth", "🔧 Synthesizing",
-                'yosys -p "read_verilog ${CMAKE_SOURCE_DIR}/gateware/${TOP}.v\\; synth_ice40 -top ${TOP} -json ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TOP}.json"'
-            ),
-            (
-                "pnr", "📍 Placing and Routing",
-                f'nextpnr-ice40 --{device} --package sg48 --json ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.json --pcf ${{CMAKE_SOURCE_DIR}}/${{TOP}}.pcf --asc ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.asc'
-            ),
-            (
-                "bitstream", "💾 Bitstream",
-                'icepack ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TOP}.asc ../bin/${TOP}.bin'
-            ),
-        ]
 
         with open(path, "w") as f:
             f.write("cmake_minimum_required(VERSION 3.12)\n")
             f.write(f"project({top}_ice40)\n\n")
             f.write("set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})\n")
-            f.write(f"set(TOP {top})\n")
+            f.write(f"set(TOP {top})  # Change this to your actual top-level module name\n")
             f.write(f"set(BUILD_LOG {log_path})\n\n")
 
-            for i, (name, label, cmd) in enumerate(steps):
-                percent = round(((i + 1) / len(steps)) * 100)
-                f.write(f"add_custom_target({name}\n")
-                f.write(f"    COMMAND ${{CMAKE_COMMAND}} -E echo \"[{percent}%] {label}...\"\n")
+            # Collect Verilog sources
+            f.write('file(GLOB_RECURSE VERILOG_SOURCES "${CMAKE_SOURCE_DIR}/gateware/*.v")\n\n')
 
-                if name == "synth":
-                    f.write(f"    COMMAND /bin/bash -c 'yosys -p \"read_verilog ${{CMAKE_SOURCE_DIR}}/gateware/${{TOP}}.v\\; synth_ice40 -top ${{TOP}} -json ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.json\" >> ${{BUILD_LOG}} 2>&1'\n")
-                elif name == "bitstream":
-                    f.write("    COMMAND ${CMAKE_COMMAND} -E make_directory ../bin\n")
-                    f.write(f"    COMMAND /bin/bash -c \"{cmd} >> ${{BUILD_LOG}} 2>&1\"\n")
-                else:
-                    f.write(f"    COMMAND /bin/bash -c \"{cmd} >> ${{BUILD_LOG}} 2>&1\"\n")
-
-                if i > 0:
-                    f.write(f"    DEPENDS {steps[i - 1][0]}\n")
-                f.write(f"    COMMENT \"{label} step\"\n")
-                f.write(")\n\n")
-
-            f.write("add_custom_target(fpga\n")
-            f.write("    DEPENDS bitstream\n")
-            f.write("    COMMENT \"🧵 FPGA binary build (all stages)\"\n")
+            # Simulation step
+            f.write("add_custom_target(sim\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[25%] 🧪 Simulation...\"\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E make_directory ../bin\n")
+            f.write("    COMMAND bash -c 'vSim ../bin/sim.out ${VERILOG_SOURCES} >> \"${BUILD_LOG}\" 2>&1'\n")
+            f.write("    COMMENT \"🧪 Simulation step\"\n")
             f.write(")\n\n")
 
+            # Synthesis step with yosys script file
+            f.write("add_custom_target(synth\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[50%] 🔧 Synthesizing...\"\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"read_verilog ${VERILOG_SOURCES}\" > ${CMAKE_BINARY_DIR}/synth.ys\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"hierarchy -check -top ${TOP}\" >> ${CMAKE_BINARY_DIR}/synth.ys\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"synth_ice40 -top ${TOP} -json ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TOP}.json\" >> ${CMAKE_BINARY_DIR}/synth.ys\n")
+            f.write("    COMMAND yosys -s ${CMAKE_BINARY_DIR}/synth.ys >> \"${BUILD_LOG}\" 2>&1\n")
+            f.write("    DEPENDS sim\n")
+            f.write("    COMMENT \"🔧 Synthesizing step\"\n")
+            f.write(")\n\n")
+
+            # PNR step
+            f.write("add_custom_target(pnr\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[75%] 📍 Placing and Routing...\"\n")
+            f.write(f"    COMMAND bash -c 'nextpnr-ice40 --{device} --package sg48 --json ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.json --pcf ${{CMAKE_SOURCE_DIR}}/${{TOP}}.pcf --asc ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.asc >> \"${{BUILD_LOG}}\" 2>&1'\n")
+            f.write("    DEPENDS synth\n")
+            f.write("    COMMENT \"📍 Placing and Routing step\"\n")
+            f.write(")\n\n")
+
+            # Bitstream step
+            f.write("add_custom_target(bitstream\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[100%] 💾 Bitstream...\"\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E make_directory ../bin\n")
+            f.write("    COMMAND bash -c 'icepack ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TOP}.asc ../bin/${TOP}.bin >> \"${BUILD_LOG}\" 2>&1'\n")
+            f.write("    DEPENDS pnr\n")
+            f.write("    COMMENT \"💾 Bitstream step\"\n")
+            f.write(")\n\n")
+
+            # Aggregate FPGA target
+            f.write("add_custom_target(fpga\n")
+            f.write("    DEPENDS bitstream\n")
+            f.write("    COMMENT \"🧵 FPGA binary build (simulation + synth + pnr + bitstream)\"\n")
+            f.write(")\n\n")
+
+            # Flash target
             f.write("add_custom_target(flash\n")
             f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[100%] 🚀 Flashing to FPGA\"\n")
-            f.write("    COMMAND /bin/bash -c \"iceprog '../bin/${TOP}.bin' >> ${BUILD_LOG} 2>&1\"\n")
+            f.write("    COMMAND bash -c 'iceprog ../bin/${TOP}.bin >> \"${BUILD_LOG}\" 2>&1'\n")
             f.write("    COMMENT \"Flash .bin to FPGA\"\n")
             f.write(")\n")
 
