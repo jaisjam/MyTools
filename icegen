@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+
+import os
+import argparse
+import sys
+from argparse import RawTextHelpFormatter
+
+class IceGen:
+    __VERSION = "0.006"
+
+    def __init__(self):
+        self.__parser = argparse.ArgumentParser(
+            description="🧊 icegen: iCE40 CMake project generator",
+            usage="icegen [-p] [-t [name]] [-d device] [-v]",
+            formatter_class=RawTextHelpFormatter
+        )
+        self.__setup_arguments()
+
+    def __setup_arguments(self):
+        self.__parser.add_argument(
+            "-p", "--project",
+            dest="project",
+            metavar="",
+            help="  -p or --project     Create a new iCE40 project with the given name"
+        )
+        self.__parser.add_argument(
+            "-t", "--template",
+            dest="template",
+            nargs="?",
+            const="sample",
+            default="none",
+            metavar="",
+            help="  -t or --template    Template name (default: sample if -t passed without name)"
+        )
+        self.__parser.add_argument(
+            "-d", "--device",
+            dest="device",
+            default="up5k",
+            metavar="",
+            help="  -d or --device      Target device (default: up5k)"
+        )
+        self.__parser.add_argument(
+            "-v", "--version",
+            action="store_true",
+            help="  -v or --version     Show version and exit"
+        )
+
+    def __call__(self):
+        args = self.__parser.parse_args()
+
+        if args.version:
+            print(f"icegen version {self.__VERSION}")
+            sys.exit(0)
+
+        if not args.project:
+            self.__parser.print_help()
+            sys.exit(1)
+
+        top_name = args.template if args.template != "none" else args.project
+        self.__create_structure(args.project, args.device, top_name, args.template)
+
+    def __create_structure(self, project, device, top, template):
+        base = os.path.abspath(project)
+        subdirs = ["gateware", "build", "software"]
+
+        for sub in subdirs:
+            os.makedirs(os.path.join(base, sub), exist_ok=True)
+
+        # Ensure ../bin directory exists
+        bin_dir = os.path.join(os.path.dirname(base), "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+
+        self.__write_cmakelists(base, device, top)
+        self.__write_readme(base, device, top)
+
+        if template != "none":
+            self.__write_sample_files(base, top)
+
+        print(f"✅ Project '{project}' created (device: {device}, top: {top}, template: {template})")
+
+    def __write_cmakelists(self, base, device, top):
+        path = os.path.join(base, "CMakeLists.txt")
+        log_path = "build.log"
+
+        steps = [
+            (
+                "synth", "🔧 Synthesizing",
+                'yosys -p "read_verilog ${CMAKE_SOURCE_DIR}/gateware/${TOP}.v\\; synth_ice40 -top ${TOP} -json ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TOP}.json"'
+            ),
+            (
+                "pnr", "📍 Placing and Routing",
+                f'nextpnr-ice40 --{device} --package sg48 --json ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.json --pcf ${{CMAKE_SOURCE_DIR}}/${{TOP}}.pcf --asc ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.asc'
+            ),
+            (
+                "bitstream", "💾 Bitstream",
+                'icepack ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TOP}.asc ../bin/${TOP}.bin'
+            ),
+        ]
+
+        with open(path, "w") as f:
+            f.write("cmake_minimum_required(VERSION 3.12)\n")
+            f.write(f"project({top}_ice40)\n\n")
+            f.write("set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})\n")
+            f.write(f"set(TOP {top})\n")
+            f.write(f"set(BUILD_LOG {log_path})\n\n")
+
+            for i, (name, label, cmd) in enumerate(steps):
+                percent = round(((i + 1) / len(steps)) * 100)
+                f.write(f"add_custom_target({name}\n")
+                f.write(f"    COMMAND ${{CMAKE_COMMAND}} -E echo \"[{percent}%] {label}...\"\n")
+
+                if name == "synth":
+                    f.write(f"    COMMAND /bin/bash -c 'yosys -p \"read_verilog ${{CMAKE_SOURCE_DIR}}/gateware/${{TOP}}.v\\; synth_ice40 -top ${{TOP}} -json ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.json\" >> ${{BUILD_LOG}} 2>&1'\n")
+                elif name == "bitstream":
+                    f.write("    COMMAND ${CMAKE_COMMAND} -E make_directory ../bin\n")
+                    f.write(f"    COMMAND /bin/bash -c \"{cmd} >> ${{BUILD_LOG}} 2>&1\"\n")
+                else:
+                    f.write(f"    COMMAND /bin/bash -c \"{cmd} >> ${{BUILD_LOG}} 2>&1\"\n")
+
+                if i > 0:
+                    f.write(f"    DEPENDS {steps[i - 1][0]}\n")
+                f.write(f"    COMMENT \"{label} step\"\n")
+                f.write(")\n\n")
+
+            f.write("add_custom_target(fpga\n")
+            f.write("    DEPENDS bitstream\n")
+            f.write("    COMMENT \"🧵 FPGA binary build (all stages)\"\n")
+            f.write(")\n\n")
+
+            f.write("add_custom_target(flash\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[100%] 🚀 Flashing to FPGA\"\n")
+            f.write("    COMMAND /bin/bash -c \"iceprog '../bin/${TOP}.bin' >> ${BUILD_LOG} 2>&1\"\n")
+            f.write("    COMMENT \"Flash .bin to FPGA\"\n")
+            f.write(")\n")
+
+    def __write_readme(self, base, device, top):
+        path = os.path.join(base, "README.md")
+        with open(path, "w") as f:
+            f.write(f"# iCE40 CMake Project: {top}\n\n")
+            f.write(f"Target device: `{device}`\n\n")
+            f.write("## 📁 Directory Layout\n\n")
+            f.write("```\n")
+            f.write("gateware/      # Verilog source files\n")
+            f.write("build/         # CMake build output\n")
+            f.write("software/      # Optional firmware\n")
+            f.write("CMakeLists.txt # Build script\n")
+            f.write("```\n\n")
+            f.write("## 🛠️ Build Instructions\n\n")
+            f.write("```sh\n")
+            f.write("cd build\n")
+            f.write("cmake ..\n")
+            f.write("cmake --build . --target fpga -j4\n")
+            f.write("cmake --build . --target flash\n")
+            f.write("cat build.log  # View synthesis and flash log\n")
+            f.write("```\n")
+
+    def __write_sample_files(self, base, top):
+        v_path = os.path.join(base, "gateware", f"{top}.v")
+        with open(v_path, "w") as f:
+            f.write(f"module {top} (\n")
+            f.write("    input clk,\n")
+            f.write("    output reg led\n")
+            f.write(");\n\n")
+            f.write("    always @(posedge clk)\n")
+            f.write("        led <= ~led;\n\n")
+            f.write("endmodule\n")
+
+        pcf_path = os.path.join(base, f"{top}.pcf")
+        with open(pcf_path, "w") as f:
+            f.write("# Example PCF (pin constraint file)\n")
+            f.write("set_io clk 21\n")
+            f.write("set_io led 20\n")
+
+# Entry point
+if __name__ == "__main__":
+    IceGen()()
