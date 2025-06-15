@@ -23,6 +23,7 @@ class IceGen:
             metavar="",
             help="  -p or --project     Create a new iCE40 project with the given name"
         )
+
         self.__parser.add_argument(
             "-t", "--template",
             dest="template",
@@ -32,6 +33,7 @@ class IceGen:
             metavar="",
             help="  -t or --template    Template name (default: sample if -t passed without name)"
         )
+
         self.__parser.add_argument(
             "-d", "--device",
             dest="device",
@@ -39,6 +41,7 @@ class IceGen:
             metavar="",
             help="  -d or --device      Target device (default: up5k)"
         )
+
         self.__parser.add_argument(
             "-v", "--version",
             action="store_true",
@@ -66,11 +69,7 @@ class IceGen:
         for sub in subdirs:
             os.makedirs(os.path.join(base, sub), exist_ok=True)
 
-        # Ensure ../bin directory exists
-        bin_dir = os.path.join(os.path.dirname(base), "bin")
-        os.makedirs(bin_dir, exist_ok=True)
-
-        # ✅ Fix: generate CMakeLists.txt
+        # Fix: generate CMakeLists.txt
         self.__write_cmakelists(base, device, top)
         self.__write_readme(base, device, top)
 
@@ -80,9 +79,8 @@ class IceGen:
         print(f"Project '{project}' created (device: {device}, top: {top}, template: {template})")
 
     def __write_cmakelists(self, base, device, top):
-        import os
         path = os.path.join(base, "CMakeLists.txt")
-        log_path = "build.log"
+        log_path = "AireWetIceBreaker++.log"
 
         with open(path, "w") as f:
             f.write("cmake_minimum_required(VERSION 3.12)\n")
@@ -96,49 +94,49 @@ class IceGen:
 
             # Simulation step
             f.write("add_custom_target(sim\n")
-            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[25%] 🧪 Simulation...\"\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[25%] Simulation...\"\n")
             f.write("    COMMAND ${CMAKE_COMMAND} -E make_directory ../bin\n")
             f.write("    COMMAND bash -c 'vSim ../bin/sim.out ${VERILOG_SOURCES} >> \"${BUILD_LOG}\" 2>&1'\n")
-            f.write("    COMMENT \"🧪 Simulation step\"\n")
+            f.write("    COMMENT \"Simulation step\"\n")
             f.write(")\n\n")
 
             # Synthesis step with yosys script file
             f.write("add_custom_target(synth\n")
-            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[50%] 🔧 Synthesizing...\"\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[50%] Synthesizing...\"\n")
             f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"read_verilog ${VERILOG_SOURCES}\" > ${CMAKE_BINARY_DIR}/synth.ys\n")
             f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"hierarchy -check -top ${TOP}\" >> ${CMAKE_BINARY_DIR}/synth.ys\n")
             f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"synth_ice40 -top ${TOP} -json ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TOP}.json\" >> ${CMAKE_BINARY_DIR}/synth.ys\n")
             f.write("    COMMAND yosys -s ${CMAKE_BINARY_DIR}/synth.ys >> \"${BUILD_LOG}\" 2>&1\n")
             f.write("    DEPENDS sim\n")
-            f.write("    COMMENT \"🔧 Synthesizing step\"\n")
+            f.write("    COMMENT \"Synthesizing step\"\n")
             f.write(")\n\n")
 
             # PNR step
             f.write("add_custom_target(pnr\n")
-            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[75%] 📍 Placing and Routing...\"\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[75%] Placing and Routing...\"\n")
             f.write(f"    COMMAND bash -c 'nextpnr-ice40 --{device} --package sg48 --json ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.json --pcf ${{CMAKE_SOURCE_DIR}}/${{TOP}}.pcf --asc ${{CMAKE_RUNTIME_OUTPUT_DIRECTORY}}/${{TOP}}.asc >> \"${{BUILD_LOG}}\" 2>&1'\n")
             f.write("    DEPENDS synth\n")
-            f.write("    COMMENT \"📍 Placing and Routing step\"\n")
+            f.write("    COMMENT \"Placing and Routing step\"\n")
             f.write(")\n\n")
 
             # Bitstream step
             f.write("add_custom_target(bitstream\n")
-            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[100%] 💾 Bitstream...\"\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[100%] Bitstream...\"\n")
             f.write("    COMMAND ${CMAKE_COMMAND} -E make_directory ../bin\n")
             f.write("    COMMAND bash -c 'icepack ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TOP}.asc ../bin/${TOP}.bin >> \"${BUILD_LOG}\" 2>&1'\n")
             f.write("    DEPENDS pnr\n")
-            f.write("    COMMENT \"💾 Bitstream step\"\n")
+            f.write("    COMMENT \"Bitstream step\"\n")
             f.write(")\n\n")
 
             # Aggregate FPGA target
             f.write("add_custom_target(fpga\n")
             f.write("    DEPENDS bitstream\n")
-            f.write("    COMMENT \"🧵 FPGA binary build (simulation + synth + pnr + bitstream)\"\n")
+            f.write("    COMMENT \"FPGA binary build (simulation + synth + pnr + bitstream)\"\n")
             f.write(")\n\n")
 
             # Flash target
             f.write("add_custom_target(flash\n")
-            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[100%] 🚀 Flashing to FPGA\"\n")
+            f.write("    COMMAND ${CMAKE_COMMAND} -E echo \"[100%] Flashing to FPGA\"\n")
             f.write("    COMMAND bash -c 'iceprog ../bin/${TOP}.bin >> \"${BUILD_LOG}\" 2>&1'\n")
             f.write("    COMMENT \"Flash .bin to FPGA\"\n")
             f.write(")\n")
@@ -148,14 +146,14 @@ class IceGen:
         with open(path, "w") as f:
             f.write(f"# iCE40 CMake Project: {top}\n\n")
             f.write(f"Target device: `{device}`\n\n")
-            f.write("## 📁 Directory Layout\n\n")
+            f.write("## Directory Layout\n\n")
             f.write("```\n")
             f.write("gateware/      # Verilog source files\n")
             f.write("build/         # CMake build output\n")
             f.write("software/      # Optional firmware\n")
             f.write("CMakeLists.txt # Build script\n")
             f.write("```\n\n")
-            f.write("## 🛠️ Build Instructions\n\n")
+            f.write("## Build Instructions\n\n")
             f.write("```sh\n")
             f.write("cd build\n")
             f.write("cmake ..\n")
@@ -178,8 +176,8 @@ class IceGen:
         pcf_path = os.path.join(base, f"{top}.pcf")
         with open(pcf_path, "w") as f:
             f.write("# Example PCF (pin constraint file)\n")
-            f.write("set_io clk 21\n")
-            f.write("set_io led 20\n")
+            f.write("# set_io clk <pin>\n")
+            f.write("# set_io led <pin>\n")
 
 # Entry point
 if __name__ == "__main__":

@@ -11,16 +11,16 @@ if [[ -z "$OUT_FILE" || -z "$SRC_FILE" ]]; then
   exit 1
 fi
 
-echo "🛠️ Compiling $SRC_FILE to $OUT_FILE"
+echo "Compiling $SRC_FILE to $OUT_FILE"
 iverilog -o "$OUT_FILE" "$SRC_FILE"
 
-echo "🚀 Running simulation..."
+echo "Running simulation..."
 vvp "$OUT_FILE"
 
 # Optional waveform capture
 if [[ -f waveform.vcd ]]; then
-  echo "📦 Moving waveform.vcd to ../bin/"
+  echo "Moving waveform.vcd to ../bin/"
   mv waveform.vcd ../bin/waveform.vcd
 fi
 
-echo "✅ Simulation completed."
+echo "Simulation completed !!"
