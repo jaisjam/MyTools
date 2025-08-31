@@ -44,13 +44,7 @@ mkdir /repo/<user-name>/Compiler
 curl -LO https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2025-08-31/oss-cad-suite-darwin-arm64-20250831.tgz
 tar -xvzf oss-cad-suite-darwin-arm64-20250831.tgz
 mv oss-cad-suite-darwin-arm64-20250831 oss-cad-suite
-```
-
-Add to `~/.bashrc` or `~/.zshrc`:
-
-```bash
-export PATH=$HOME/oss-cad-suite/oss-cad-suite-darwin-arm64-20250831/bin:$PATH
-```
+source fpga-env
 
 Reload and test:
 
