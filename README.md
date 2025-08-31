@@ -45,6 +45,7 @@ curl -LO https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2025-0
 tar -xvzf oss-cad-suite-darwin-arm64-20250831.tgz
 mv oss-cad-suite-darwin-arm64-20250831 oss-cad-suite
 source fpga-env
+```
 
 Reload and test:
 
