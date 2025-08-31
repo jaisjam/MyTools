@@ -40,10 +40,10 @@ sudo apt install -y build-essential cmake git iverilog gtkwave libftdi1-2 libusb
 Example for **macOS (Apple Silicon, ARM64)** — adjust filename for your platform:
 
 ```bash
+mkdir /repo/<user-name>/Compiler
 curl -LO https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2025-08-31/oss-cad-suite-darwin-arm64-20250831.tgz
 tar -xvzf oss-cad-suite-darwin-arm64-20250831.tgz
-mkdir -p ~/oss-cad-suite
-mv oss-cad-suite-darwin-arm64-20250831 ~/oss-cad-suite/
+mv oss-cad-suite-darwin-arm64-20250831 oss-cad-suite
 ```
 
 Add to `~/.bashrc` or `~/.zshrc`:
