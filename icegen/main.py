@@ -15,7 +15,7 @@ def main():
     os.makedirs(os.path.join(base_dir,"build"), exist_ok=True)
     IceGenHw().create_hw_structure(base_dir, device, top, template)
     IceGenSw().create_sw_structure(base_dir)
-    base.write_root_cmakelists(base_dir, project)
+    base.write_root_build(base_dir, project)
     base.write_root_readme(base_dir, project)
     print(f"✅ Project '{project}' created")
 
