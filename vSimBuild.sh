@@ -4,23 +4,28 @@
 set -e
 
 OUT_FILE="$1"
-SRC_FILE="$2"
+shift
+SRC_FILES=("$@")
 
-if [[ -z "$OUT_FILE" || -z "$SRC_FILE" ]]; then
-  echo "Usage: $0 <output_sim.out> <verilog_source.v>"
+if [[ -z "$OUT_FILE" || ${#SRC_FILES[@]} -eq 0 ]]; then
+  echo "Usage: $0 <output_sim.out> <verilog_source.v ...>"
   exit 1
 fi
 
-echo "Compiling $SRC_FILE to $OUT_FILE"
-iverilog -o "$OUT_FILE" "$SRC_FILE"
+# Collect unique include directories from all sources
+INCLUDE_DIRS=()
+for f in "${SRC_FILES[@]}"; do
+  dir=$(dirname "$f")
+  if [[ ! " ${INCLUDE_DIRS[*]} " =~ " $dir " ]]; then
+    INCLUDE_DIRS+=("-I$dir")
+  fi
+done
+
+echo "Compiling ${SRC_FILES[*]} to $OUT_FILE"
+iverilog "${INCLUDE_DIRS[@]}" -o "$OUT_FILE" "${SRC_FILES[@]}"
 
 echo "Running simulation..."
 vvp "$OUT_FILE"
 
-# Optional waveform capture
-if [[ -f waveform.vcd ]]; then
-  echo "Moving waveform.vcd to ../bin/"
-  mv waveform.vcd ../bin/waveform.vcd
-fi
-
 echo "Simulation completed !!"
+
