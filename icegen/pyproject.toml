@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "icegen"
+version = "0.1.0"
+description = "iCE40 CMake project generator"
+authors = [
+    { 
+        name = "aireWet", 
+        email = "jaysonjames254@gmail.com" 
+    }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+
+[project.scripts]
+icegen = "main:main"
+
+[tool.setuptools]
+py-modules = [
+    "main",
+    "AIRXX_aireWetICEgenBase",
+    "AIRXX_aireWetICEgenHardWare",
+    "AIRXX_aireWetICEgenSoftWare",
+]
