@@ -6,6 +6,7 @@ class IceGenSw(IceGen):
     def create_sw_structure(self, base):
         sw_base = os.path.join(base, "software")
         os.makedirs(sw_base, exist_ok=True)
+        os.makedirs(os.path.join(sw_base, "build"), exist_ok=True)
         for sub in ["module/src","module/inc","airelib/src","airelib/inc","test/src","test/inc"]:
             os.makedirs(os.path.join(sw_base, sub), exist_ok=True)
         main_cpp = os.path.join(sw_base, "main.cpp")
