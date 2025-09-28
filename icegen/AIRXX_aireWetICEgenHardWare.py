@@ -102,13 +102,27 @@ class IceGenHw(IceGen):
 
 
     def _write_sample_verilog(self, gw_base, top, template):
-        if template == "none": return
+        if template == "none":
+            return
         with open(os.path.join(gw_base, f"{top}.v"), "w") as f:
-            f.write(f"module {top}(input clk, output reg led); always @(posedge clk) led<=~led; endmodule\n")
+            f.write(f"module {top}(input clk, output reg led);\n")
+            f.write("  // 24-bit counter for clock division\n")
+            f.write("  reg [23:0] counter = 0;\n\n")
+            f.write("  always @(posedge clk) begin\n")
+            f.write("    counter <= counter + 1;\n")
+            f.write("    if(counter == 0)  // overflow toggle\n")
+            f.write("      led <= ~led;\n")
+            f.write("  end\n")
+            f.write("endmodule\n")
 
     def _write_sample_pcf(self, gw_base, top, device):
         with open(os.path.join(gw_base, f"{top}.pcf"), "w") as f:
-            f.write(f"# PCF for {top} on {device}\n# TODO: add pins\n")
+            f.write(f"# PCF for {top} on {device} (iCEBreaker v1.0e)\n")
+            f.write("# On-board green user LED (LED0)\n")
+            f.write("set_io led 11\n")
+            f.write("# On-board 12 MHz clock oscillator\n")
+            f.write("set_io clk 35\n")
+
 
     def _write_vscode_config(self, gw_base, top):
         vs = os.path.join(gw_base, ".vscode")
